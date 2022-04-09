@@ -1,5 +1,6 @@
 #include "hash_test.h"
 #include "ConsistentHashRing.h"
+#include "endpoint_hash.h"
 #include <algorithm>
 #include <array>
 #include <cstring>
