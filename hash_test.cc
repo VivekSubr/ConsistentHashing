@@ -1,6 +1,7 @@
 #include "hash_test.h"
 #include "ConsistentHashRing.h"
 #include "endpoint_hash.h"
+#include <unordered_map>
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -19,11 +20,11 @@ TEST(HashTest, CreateRing)
     };
 
     // Nodes - endpoints, keys - let's say session IDs
-    ConsistentHashRing<EndPoint, uint> Ring(endPt_arr);
-    ASSERT_EQ(Ring.Size(), 4);
-    ASSERT_EQ(Ring.GetNodeIndex(endPt_arr[2]), 2);
-    ASSERT_EQ(Ring.NodePredecessor(2)->SvcName, "TestSvc2");
-    ASSERT_EQ(Ring.NodeSuccessor(2)->SvcName, "TestSvc4");
+    ConsistentHashRing<std::shared_ptr<EndPoint>, uint> Ring(endPt_arr);
+    ASSERT_EQ(Ring.size(), 4);
+    ASSERT_EQ(Ring.getNodeIndex(endPt_arr[2]), 2);
+    ASSERT_EQ(Ring.nodePredecessor(2)->SvcName, "TestSvc2");
+    ASSERT_EQ(Ring.nodeSuccessor(2)->SvcName, "TestSvc4");
 }
 
 TEST(HashTest, AddEndpoint)
@@ -36,31 +37,31 @@ TEST(HashTest, AddEndpoint)
     };
 
     // Nodes - endpoints, keys - let's say session IDs
-    ConsistentHashRing<EndPoint, uint> Ring(endPt_arr);
-    ASSERT_EQ(Ring.Size(), 4);
+    ConsistentHashRing<shared_ptr<EndPoint>, uint> Ring(endPt_arr);
+    ASSERT_EQ(Ring.size(), 4);
 
     std::unordered_map<uint, std::pair<std::string, std::string>> tMap_before_add = {
         {0, {"TestSvc4", "TestSvc2"}}, {1, {"TestSvc1", "TestSvc3"}}, {2, {"TestSvc2", "TestSvc4"}}, {3, {"TestSvc3", "TestSvc1"}}}; // Note the way every service occurs only twice, a simple load balancing.
 
     for (auto mapIt : tMap_before_add)
     {
-        ASSERT_EQ(Ring.NodePredecessor(mapIt.first)->SvcName, mapIt.second.first);
-        ASSERT_EQ(Ring.NodeSuccessor(mapIt.first)->SvcName, mapIt.second.second);
+        ASSERT_EQ(Ring.nodePredecessor(mapIt.first)->SvcName, mapIt.second.first);
+        ASSERT_EQ(Ring.nodeSuccessor(mapIt.first)->SvcName, mapIt.second.second);
     }
 
     shared_ptr<EndPoint> newPt = make_shared<EndPoint>("TestSvc5", "10.163.68.163", ip_addr_type::IPV4);
-    Ring.EmplaceNode(newPt);
-    ASSERT_EQ(Ring.Size(), 5);
-    ASSERT_EQ(Ring.GetNodeIndex(endPt_arr[2]), 2);
-    ASSERT_EQ(Ring.GetNodeIndex(newPt), 4);
+    Ring.emplaceNode(newPt);
+    ASSERT_EQ(Ring.size(), 5);
+    ASSERT_EQ(Ring.getNodeIndex(endPt_arr[2]), 2);
+    ASSERT_EQ(Ring.getNodeIndex(newPt), 4);
 
     std::unordered_map<uint, std::pair<std::string, std::string>> tMap_after_add = {
         {0, {"TestSvc5", "TestSvc2"}}, {1, {"TestSvc1", "TestSvc3"}}, {2, {"TestSvc2", "TestSvc4"}}, {3, {"TestSvc3", "TestSvc5"}}, {4, {"TestSvc4", "TestSvc1"}}}; // Only nodes 0 and 3 impacted by new node
 
     for (auto mapIt : tMap_after_add)
     {
-        ASSERT_EQ(Ring.NodePredecessor(mapIt.first)->SvcName, mapIt.second.first);
-        ASSERT_EQ(Ring.NodeSuccessor(mapIt.first)->SvcName, mapIt.second.second);
+        ASSERT_EQ(Ring.nodePredecessor(mapIt.first)->SvcName, mapIt.second.first);
+        ASSERT_EQ(Ring.nodeSuccessor(mapIt.first)->SvcName, mapIt.second.second);
     }
 }
 
@@ -74,33 +75,49 @@ TEST(HashTest, RemoveEndpoint)
     };
 
     // Nodes - endpoints, keys - let's say session IDs
-    ConsistentHashRing<EndPoint, uint> Ring(endPt_arr);
-    ASSERT_EQ(Ring.Size(), 4);
+    ConsistentHashRing<shared_ptr<EndPoint>, uint> Ring(endPt_arr);
+    ASSERT_EQ(Ring.size(), 4);
 
-    Ring.RemoveNode(endPt_arr[2]);
-    ASSERT_EQ(Ring.Size(), 4);
-    ASSERT_EQ(Ring.GetNodeAtIndex(2), nullptr);
+    Ring.removeNode(endPt_arr[2]);
+    ASSERT_EQ(Ring.size(), 4);
+    ASSERT_EQ(Ring.getNodeAtIndex(2), nullptr);
 
     std::unordered_map<uint, std::pair<std::string, std::string>> tMap_before_trim = {
         {0, {"TestSvc4", "TestSvc2"}}, {1, {"TestSvc1", "TestSvc4"}}, {2, {"TestSvc2", "TestSvc4"}}, {3, {"TestSvc2", "TestSvc1"}}}; // changes are minimal
 
     for (auto mapIt : tMap_before_trim)
     {
-        ASSERT_EQ(Ring.NodePredecessor(mapIt.first)->SvcName, mapIt.second.first);
-        ASSERT_EQ(Ring.NodeSuccessor(mapIt.first)->SvcName, mapIt.second.second);
+        ASSERT_EQ(Ring.nodePredecessor(mapIt.first)->SvcName, mapIt.second.first);
+        ASSERT_EQ(Ring.nodeSuccessor(mapIt.first)->SvcName, mapIt.second.second);
     }
 
-    Ring.TrimRing();
-    ASSERT_EQ(Ring.Size(), 3);
+    Ring.trimRing();
+    ASSERT_EQ(Ring.size(), 3);
 
     std::unordered_map<uint, std::pair<std::string, std::string>> tMap_after_trim = {
         {0, {"TestSvc4", "TestSvc2"}}, {1, {"TestSvc1", "TestSvc4"}}, {2, {"TestSvc2", "TestSvc1"}}, {3, {"TestSvc4", "TestSvc2"}}}; // note how there are more changes after a vector resize... hence we avoid.
 
     for (auto mapIt : tMap_after_trim)
     {
-        ASSERT_EQ(Ring.NodePredecessor(mapIt.first)->SvcName, mapIt.second.first);
-        ASSERT_EQ(Ring.NodeSuccessor(mapIt.first)->SvcName, mapIt.second.second);
+        ASSERT_EQ(Ring.nodePredecessor(mapIt.first)->SvcName, mapIt.second.first);
+        ASSERT_EQ(Ring.nodeSuccessor(mapIt.first)->SvcName, mapIt.second.second);
     }
+}
+
+TEST(HashTest, EmptyRing)
+{
+    vector<shared_ptr<EndPoint>> endPt_arr = { nullptr, nullptr, nullptr};
+    
+    ConsistentHashRing<std::shared_ptr<EndPoint>, uint> Ring(endPt_arr);
+    ASSERT_EQ(Ring.size(), 0); //nulls aren't added!
+    ASSERT_EQ(Ring.getNumberNodes(), 0);
+    ASSERT_TRUE(Ring.isRingEmpty());
+
+    shared_ptr<EndPoint> newPt = make_shared<EndPoint>("TestSvc5", "10.163.68.163", ip_addr_type::IPV4);
+    Ring.emplaceNode(newPt);
+    ASSERT_EQ(Ring.size(), 1);
+    ASSERT_EQ(Ring.getNumberNodes(), 1);
+    ASSERT_FALSE(Ring.isRingEmpty());
 }
 
 // https://stackoverflow.com/questions/440133/how-do-i-create-a-random-alpha-numeric-string-in-c
